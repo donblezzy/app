@@ -1,0 +1,34 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: donblezzy123/e-commerce-backend
+    container_name: backend
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: donblezzy123/e-commerce-frontend
+    container_name: frontend
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "80:80"  # Nginx serves frontend on port 80 internally
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
