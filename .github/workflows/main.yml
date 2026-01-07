@@ -1,0 +1,82 @@
+name: Ecom-Action
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REGISTRY: ${{ secrets.REGISTRY }}
+  ECR_REPOSITORY: ecomapp
+  BACKEND_IMAGE: backend
+  FRONTEND_IMAGE: frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      # -------------------------
+      # Checkout source code
+      # -------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # Setup Node.js
+      # -------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # -------------------------
+      # Backend tests
+      # -------------------------
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      
+      # -------------------------
+      # Frontend tests
+      # -------------------------
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+
+      # -------------------------
+      # Configure AWS credentials
+      # -------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # -------------------------
+      # Build & Push Backend Image to ECR
+      # -------------------------
+      - name: Build & Push Backend Image to ECR
+        uses: appleboy/docker-ecr-action@v0.0.5
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          repo: ${{ env.ECR_REPOSITORY }}
+          region: ${{ env.AWS_REGION }}
+          tags: latest, ${{ github.run_number }}
+          dockerfile: backend/Dockerfile
+          context: backend
+
+      # -------------------------
+      # Build & Push Frontend Image to ECR
+      # -------------------------
+      - name: Build & Push Frontend Image to ECR
+        uses: appleboy/docker-ecr-action@master
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          repo: ${{ env.ECR_REPOSITORY }}
+          region: ${{ env.AWS_REGION }}
+          tags: ${{ github.run_number }}
+          dockerfile: frontend/Dockerfile
+          context: frontend
