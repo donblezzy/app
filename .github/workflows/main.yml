@@ -59,7 +59,7 @@ jobs:
       # Build & Push Backend Image to ECR
       # -------------------------
       - name: Build & Push Backend Image to ECR
-        uses: appleboy/docker-ecr-action@v0.0.5
+        uses: appleboy/docker-ecr-action@master
         with:
           registry: ${{ env.ECR_REGISTRY }}
           repo: ${{ env.ECR_REPOSITORY }}
