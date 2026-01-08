@@ -1,122 +1,103 @@
-name: Ecom-Action
+name: ECR-Build-and-EKS-Deploy
 
 on:
   workflow_dispatch:
 
 env:
   AWS_REGION: us-east-2
-  ECR_REGISTRY: ${{ secrets.REGISTRY }}                # e.g., 123456789012.dkr.ecr.us-east-2.amazonaws.com
+  ECR_REGISTRY: ${{ secrets.REGISTRY }}
   BACKEND_IMAGE: backend
   FRONTEND_IMAGE: frontend
   EKS_CLUSTER: ecom-eks
   HELM_CHART_PATH: helm/Appcharts
-  K8S_NAMESPACE: my-app
-  INGRESS_HOST: ecom.damdav.online
-  INGRESS_CERT_ARN: arn:aws:acm:us-east-2:503876630944:certificate/48591f7e-c999-4547-8bf9-5337a7b6b945
+  NAMESPACE: my-app
 
 jobs:
-  BUILD_AND_PUBLISH:
+  BUILD_AND_PUSH:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Install backend dependencies
-        working-directory: backend
-        run: npm install
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm install
-
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build & Push Backend Image
-        run: |
-          docker build -t ${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest \
-                       -t ${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.run_number }} backend
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.run_number }}
+        uses: appleboy/docker-ecr-action@master
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          repo: ${{ env.BACKEND_IMAGE }}
+          region: ${{ env.AWS_REGION }}
+          dockerfile: backend/Dockerfile
+          context: backend
+          tags: latest,${{ github.run_number }}
 
       - name: Build & Push Frontend Image
-        run: |
-          docker build -t ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest \
-                       -t ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.run_number }} frontend
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.run_number }}
+        uses: appleboy/docker-ecr-action@master
+        with:
+          registry: ${{ env.ECR_REGISTRY }}
+          repo: ${{ env.FRONTEND_IMAGE }}
+          region: ${{ env.AWS_REGION }}
+          dockerfile: frontend/Dockerfile
+          context: frontend
+          tags: latest,${{ github.run_number }}
 
-  DeployToEKS:
-    needs: BUILD_AND_PUBLISH
+  DEPLOY_TO_EKS:
+    needs: BUILD_AND_PUSH
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update Kubeconfig
-        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig \
+              --name ${{ env.EKS_CLUSTER }} \
+              --region ${{ env.AWS_REGION }}
 
+      # 🔐 MongoDB Atlas Secret (CREATED AT DEPLOY TIME)
+      - name: Create MongoDB Secret
+        run: |
+          kubectl delete secret mongo-secret \
+            -n ${{ env.NAMESPACE }} --ignore-not-found
+
+          kubectl create secret generic mongo-secret \
+            -n ${{ env.NAMESPACE }} \
+            --from-literal=uri="${{ secrets.DB_URI }}"
+
+      # 🔐 ECR Image Pull Secret
       - name: Create ECR Pull Secret
         run: |
-          kubectl delete secret regcred --ignore-not-found
+          kubectl delete secret regcred \
+            -n ${{ env.NAMESPACE }} --ignore-not-found
+
           kubectl create secret docker-registry regcred \
+            -n ${{ env.NAMESPACE }} \
             --docker-server=${{ env.ECR_REGISTRY }} \
             --docker-username=AWS \
             --docker-password=$(aws ecr get-login-password)
 
-      - name: Deploy Helm Chart
+      # 🚀 Helm Deploy
+      - name: Deploy to EKS with Helm
         uses: bitovi/github-actions-deploy-eks-helm@v1.2.12
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
           cluster-name: ${{ env.EKS_CLUSTER }}
           chart-path: ${{ env.HELM_CHART_PATH }}
-          namespace: ${{ env.K8S_NAMESPACE }}
+          namespace: ${{ env.NAMESPACE }}
           name: ecom-stack
           values: |
             backend.image=${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}
             backend.tag=${{ github.run_number }}
-            backend.replicas=2
-            backend.resources.requests.cpu=200m
-            backend.resources.requests.memory=256Mi
-            backend.resources.limits.cpu=500m
-            backend.resources.limits.memory=512Mi
-            backend.hpa.enabled=true
-            backend.hpa.minReplicas=2
-            backend.hpa.maxReplicas=5
-            backend.hpa.targetCPUUtilizationPercentage=50
-
             frontend.image=${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}
             frontend.tag=${{ github.run_number }}
-            frontend.replicas=2
-            frontend.resources.requests.cpu=100m
-            frontend.resources.requests.memory=128Mi
-            frontend.resources.limits.cpu=250m
-            frontend.resources.limits.memory=256Mi
-            frontend.hpa.enabled=true
-            frontend.hpa.minReplicas=2
-            frontend.hpa.maxReplicas=5
-            frontend.hpa.targetCPUUtilizationPercentage=50
-
-            ingress.host=${{ env.INGRESS_HOST }}
-            ingress.certificateArn=${{ env.INGRESS_CERT_ARN }}
