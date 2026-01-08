@@ -2,10 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: {{ .Release.Namespace }}
   labels:
     app: backend
-    app.kubernetes.io/managed-by: Helm
 spec:
   replicas: {{ .Values.backend.replicas }}
   selector:
@@ -22,31 +20,105 @@ spec:
         - name: backend
           image: {{ .Values.backend.image }}:{{ .Values.backend.tag }}
           ports:
-            - containerPort: 5000
+            - containerPort: {{ .Values.backend.env.PORT | default 5000 }}
           env:
             # Non-sensitive environment variables
             - name: NODE_ENV
-              value: "PRODUCTION"
+              value: {{ .Values.backend.env.NODE_ENV | quote }}
             - name: PORT
-              value: "5000"
+              value: {{ .Values.backend.env.PORT | quote }}
             - name: FRONTEND_URL
               value: {{ .Values.backend.env.FRONTEND_URL | quote }}
             - name: DB_LOCAL_URI
               value: {{ .Values.backend.env.DB_LOCAL_URI | quote }}
-            # Sensitive environment variables from secret
-            envFrom:
-              - secretRef:
+            
+            # Sensitive environment variables from Kubernetes Secret
+            - name: DB_URI
+              valueFrom:
+                secretKeyRef:
                   name: backend-secret
+                  key: DB_URI
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: JWT_SECRET
+            - name: JWT_EXPIRES_TIME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: JWT_EXPIRES_TIME
+            - name: COOKIE_EXPIRES_TIME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: COOKIE_EXPIRES_TIME
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: STRIPE_WEBHOOK_SECRET
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: SMTP_PORT
+            - name: SMTP_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: SMTP_EMAIL
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: SMTP_PASSWORD
+            - name: SMTP_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: SMTP_FROM_EMAIL
+            - name: SMTP_FROM_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: SMTP_FROM_NAME
+            - name: CLOUDINARY_CLOUD_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: CLOUDINARY_CLOUD_NAME
+            - name: CLOUDINARY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: CLOUDINARY_API_KEY
+            - name: CLOUDINARY_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: CLOUDINARY_API_SECRET
+
+          # Readiness & Liveness probes to avoid 504s
           readinessProbe:
             httpGet:
               path: /api/health
-              port: 5000
+              port: {{ .Values.backend.env.PORT | default 5000 }}
             initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /api/health
-              port: 5000
+              port: {{ .Values.backend.env.PORT | default 5000 }}
             initialDelaySeconds: 15
             periodSeconds: 20

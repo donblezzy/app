@@ -5,22 +5,23 @@ metadata:
   namespace: {{ .Release.Namespace }}
   annotations:
     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClassName }}
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # Optional: for HTTPS with cert-manager
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   rules:
     - host: {{ .Values.ingress.host }}
       http:
         paths:
-          # Backend API
-          - path: /api(/|$)(.*)
+          # Backend routes
+          - path: /api
             pathType: Prefix
             backend:
               service:
                 name: backend-service
                 port:
                   number: 5000
-          # Frontend SPA
-          - path: /(.*)
+          # Frontend routes (SPA)
+          - path: /
             pathType: Prefix
             backend:
               service:
