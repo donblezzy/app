@@ -61,9 +61,8 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig \
-              --name ${{ env.EKS_CLUSTER }} \
-              --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name ecom-eks --region us-east-2
+
 
       # 🔐 MongoDB Atlas Secret (CREATED AT DEPLOY TIME)
       - name: Create MongoDB Secret
