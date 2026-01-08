@@ -1,4 +1,4 @@
-name: ECR-Build-and-EKS-Deploy
+name: Deploy Ecom App
 
 on:
   workflow_dispatch:
@@ -8,23 +8,41 @@ env:
   ECR_REGISTRY: ${{ secrets.REGISTRY }}
   BACKEND_IMAGE: backend
   FRONTEND_IMAGE: frontend
-  EKS_CLUSTER: ecom-eks
-  HELM_CHART_PATH: helm/Appcharts
   NAMESPACE: my-app
+  EKS_CLUSTER: ecom-eks
 
 jobs:
-  BUILD_AND_PUSH:
+  build-and-push:
     runs-on: ubuntu-latest
+    outputs:
+      run_number: ${{ github.run_number }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        run: aws ecr get-login-password | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
       - name: Build & Push Backend Image
         uses: appleboy/docker-ecr-action@master
@@ -46,14 +64,14 @@ jobs:
           context: frontend
           tags: latest,${{ github.run_number }}
 
-  DEPLOY_TO_EKS:
-    needs: BUILD_AND_PUSH
+  deploy-to-eks:
+    needs: build-and-push
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -61,42 +79,63 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ecom-eks --region us-east-2
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
 
-
-      # 🔐 MongoDB Atlas Secret (CREATED AT DEPLOY TIME)
-      - name: Create MongoDB Secret
+      - name: Create ECR pull secret
         run: |
-          kubectl delete secret mongo-secret \
-            -n ${{ env.NAMESPACE }} --ignore-not-found
-
-          kubectl create secret generic mongo-secret \
-            -n ${{ env.NAMESPACE }} \
-            --from-literal=uri="${{ secrets.DB_URI }}"
-
-      # 🔐 ECR Image Pull Secret
-      - name: Create ECR Pull Secret
-        run: |
-          kubectl delete secret regcred \
-            -n ${{ env.NAMESPACE }} --ignore-not-found
-
+          kubectl delete secret regcred -n ${{ env.NAMESPACE }} --ignore-not-found
           kubectl create secret docker-registry regcred \
             -n ${{ env.NAMESPACE }} \
             --docker-server=${{ env.ECR_REGISTRY }} \
             --docker-username=AWS \
             --docker-password=$(aws ecr get-login-password)
 
-      # 🚀 Helm Deploy
-      - name: Deploy to EKS with Helm
+      # -------------------------
+      # Create backend secrets (all sensitive vars)
+      # -------------------------
+      - name: Create Backend Secrets
+        run: |
+          kubectl delete secret backend-secret -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl create secret generic backend-secret \
+            -n ${{ env.NAMESPACE }} \
+            --from-literal=DB_URI="${{ secrets.DB_URI }}" \
+            --from-literal=STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --from-literal=JWT_EXPIRES_TIME="${{ secrets.JWT_EXPIRES_TIME }}" \
+            --from-literal=COOKIE_EXPIRES_TIME="${{ secrets.COOKIE_EXPIRES_TIME }}" \
+            --from-literal=SMTP_HOST="${{ secrets.SMTP_HOST }}" \
+            --from-literal=SMTP_PORT="${{ secrets.SMTP_PORT }}" \
+            --from-literal=SMTP_EMAIL="${{ secrets.SMTP_EMAIL }}" \
+            --from-literal=SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}" \
+            --from-literal=SMTP_FROM_EMAIL="${{ secrets.SMTP_FROM_EMAIL }}" \
+            --from-literal=SMTP_FROM_NAME="${{ secrets.SMTP_FROM_NAME }}" \
+            --from-literal=CLOUDINARY_CLOUD_NAME="${{ secrets.CLOUDINARY_CLOUD_NAME }}" \
+            --from-literal=CLOUDINARY_API_KEY="${{ secrets.CLOUDINARY_API_KEY }}" \
+            --from-literal=CLOUDINARY_API_SECRET="${{ secrets.CLOUDINARY_API_SECRET }}"
+
+      # -------------------------
+      # Deploy Helm Charts
+      # -------------------------
+      - name: Deploy Helm Chart
         uses: bitovi/github-actions-deploy-eks-helm@v1.2.12
         with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
           cluster-name: ${{ env.EKS_CLUSTER }}
-          chart-path: ${{ env.HELM_CHART_PATH }}
+          chart-path: helm/Appcharts
           namespace: ${{ env.NAMESPACE }}
-          name: ecom-stack
+          name: ecom-app
           values: |
+            # Docker images
             backend.image=${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}
             backend.tag=${{ github.run_number }}
             frontend.image=${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}
             frontend.tag=${{ github.run_number }}
+
+            # Non-sensitive environment variables
+            backend.env.NODE_ENV=PRODUCTION
+            backend.env.PORT=5000
+            backend.env.FRONTEND_URL=http://localhost:3000
+            backend.env.DB_LOCAL_URI=mongodb://127.0.0.1:27017/shopIT
