@@ -126,7 +126,7 @@ jobs:
           cluster-name: ${{ env.EKS_CLUSTER }}
           chart-path: helm/Appcharts
           namespace: ${{ env.NAMESPACE }}
-          name: ecom-app
+          name: ecom-stack
           values: |
             # Docker images
             backend.image=${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}
