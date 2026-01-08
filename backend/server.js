@@ -41,14 +41,14 @@ app.use('/api/payment', paymentRoutes);
 app.get('/api/health', (req, res) => res.json({ status: "ok" }));
 
 // Serve frontend in production
-if (process.env.NODE_ENV === "PRODUCTION") {
-  app.use(express.static(path.join(__dirname, "../frontend/build")));
+// if (process.env.NODE_ENV === "PRODUCTION") {
+//  app.use(express.static(path.join(__dirname, "../frontend/build")));
 
   // All unknown routes serve the frontend SPA
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, "../frontend/build/index.html"));
-  });
-}
+//  app.get('*', (req, res) => {
+//    res.sendFile(path.resolve(__dirname, "../frontend/build/index.html"));
+//  });
+// }
 
 // Error Middleware
 app.use(errorMiddleware);
