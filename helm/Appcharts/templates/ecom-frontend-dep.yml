@@ -2,6 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: frontend
+    app.kubernetes.io/managed-by: Helm
 spec:
   replicas: {{ .Values.frontend.replicas }}
   selector:
@@ -19,3 +23,7 @@ spec:
           image: {{ .Values.frontend.image }}:{{ .Values.frontend.tag }}
           ports:
             - containerPort: 80
+              protocol: TCP
+          env:
+            - name: API_BASE_URL
+              value: {{ .Values.frontend.apiBaseUrl | quote }}
