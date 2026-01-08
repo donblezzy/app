@@ -8,11 +8,11 @@ env:
   ECR_REGISTRY: ${{ secrets.REGISTRY }}                # e.g., 123456789012.dkr.ecr.us-east-2.amazonaws.com
   BACKEND_IMAGE: backend
   FRONTEND_IMAGE: frontend
-  EKS_CLUSTER: my-eks-cluster
-  HELM_CHART_PATH: ./chart
+  EKS_CLUSTER: ecom-eks
+  HELM_CHART_PATH: helm/Appcharts
   K8S_NAMESPACE: my-app
   INGRESS_HOST: ecom.damdav.online
-  INGRESS_CERT_ARN: arn:aws:acm:us-east-2:123456789012:certificate/xxxx-xxxx
+  INGRESS_CERT_ARN: arn:aws:acm:us-east-2:503876630944:certificate/48591f7e-c999-4547-8bf9-5337a7b6b945
 
 jobs:
   BUILD_AND_PUBLISH:
@@ -92,7 +92,7 @@ jobs:
           cluster-name: ${{ env.EKS_CLUSTER }}
           chart-path: ${{ env.HELM_CHART_PATH }}
           namespace: ${{ env.K8S_NAMESPACE }}
-          name: ecomapp
+          name: ecom-stack
           values: |
             backend.image=${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}
             backend.tag=${{ github.run_number }}

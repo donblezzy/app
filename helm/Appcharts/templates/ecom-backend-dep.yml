@@ -32,4 +32,4 @@ spec:
                   name: mongo-secret
                   key: uri
             - name: NODE_ENV
-              value: "production"
+              value: "PRODUCTION"

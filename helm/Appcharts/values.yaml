@@ -1,7 +1,7 @@
 backend:
-  image: 123456789012.dkr.ecr.us-east-2.amazonaws.com/backend
+  image: 503876630944.dkr.ecr.us-east-2.amazonaws.com/backend
   tag: latest
-  replicas: 2
+  replicas: 1
   resources:
     requests:
       cpu: 200m
@@ -11,14 +11,14 @@ backend:
       memory: 512Mi
   hpa:
     enabled: true
-    minReplicas: 2
-    maxReplicas: 5
+    minReplicas: 1
+    maxReplicas: 2
     targetCPUUtilizationPercentage: 50
 
 frontend:
-  image: 123456789012.dkr.ecr.us-east-2.amazonaws.com/frontend
+  image: 503876630944.dkr.ecr.us-east-2.amazonaws.com/frontend
   tag: latest
-  replicas: 2
+  replicas: 1
   resources:
     requests:
       cpu: 100m
@@ -28,10 +28,10 @@ frontend:
       memory: 256Mi
   hpa:
     enabled: true
-    minReplicas: 2
-    maxReplicas: 5
+    minReplicas: 1
+    maxReplicas: 2
     targetCPUUtilizationPercentage: 50
 
 ingress:
   host: ecom.damdav.online
-  certificateArn: arn:aws:acm:us-east-2:123456789012:certificate/xxxx-xxxx
+  certificateArn: arn:aws:acm:us-east-2:503876630944:certificate/48591f7e-c999-4547-8bf9-5337a7b6b945
