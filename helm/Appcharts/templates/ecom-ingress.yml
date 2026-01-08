@@ -2,8 +2,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ecom-ingress
+  namespace: {{ .Release.Namespace }}
   annotations:
-    kubernetes.io/ingress.class: nginx
+    kubernetes.io/ingress.class: {{ .Values.ingress.ingressClassName }}
 spec:
   rules:
     - host: {{ .Values.ingress.host }}
