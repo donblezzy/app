@@ -90,7 +90,7 @@ jobs:
       # -------------------------
       # CREATE NAMESPACE (FIX)
       # -------------------------
-      - name: Ensure namespace exists
+      - name: Ensure namespace exist
         run: |
           kubectl get namespace ${{ env.NAMESPACE }} \
           || kubectl create namespace ${{ env.NAMESPACE }}
