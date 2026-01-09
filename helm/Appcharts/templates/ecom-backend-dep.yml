@@ -109,16 +109,18 @@ spec:
                   name: backend-secret
                   key: CLOUDINARY_API_SECRET
 
-          # Readiness & Liveness probes to avoid 504s
+          # Readiness & Liveness probes updated to /api/health
           readinessProbe:
             httpGet:
               path: /api/health
               port: {{ .Values.backend.env.PORT | default 5000 }}
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /api/health
               port: {{ .Values.backend.env.PORT | default 5000 }}
             initialDelaySeconds: 15
             periodSeconds: 20
+            failureThreshold: 3

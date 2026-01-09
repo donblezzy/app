@@ -17,13 +17,12 @@ import paymentRoutes from './routes/payment.js'
 import { connectDatabase } from "./config/dbConnect.js";
 import errorMiddleware from "./middlewares/error.js";
 
-
 const app = express();
+
 // Connecting Database
 connectDatabase()
 
 app.use(cors({origin: "http://localhost:5000",  credentials: true}));
-
 app.use(express.json({ limit: "10mb", verify: (req, res, buf) => {
     req.rawBody = buf.toString()
 }}))
@@ -46,18 +45,19 @@ if (process.env.NODE_ENV === "PRODUCTION") {
     ))
 }
 
+// Health check endpoint for Kubernetes probes
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
+
 // Using error Middleware
 app.use(errorMiddleware)
 
 app.listen(process.env.PORT, () => {
     console.log(`Server started on PORT: ${process.env.PORT} in ${process.env.NODE_ENV} mode`);
-     });
-
-
-
+});
 
 //Handle Unhandled Promise Rejection
-
 // const server = app.listen(process.env.PORT, () => {
 //     console.log(`Server started on PORT: ${process.env.PORT} in ${process.env.NODE_ENV} mode`);
 // });
@@ -69,4 +69,3 @@ app.listen(process.env.PORT, () => {
 //         process.exit(1)
 //     })
 // })
-
