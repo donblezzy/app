@@ -154,5 +154,6 @@ jobs:
 
             backend.env.NODE_ENV=PRODUCTION
             backend.env.PORT=5000
-            backend.env.FRONTEND_URL=http://localhost:3000
-            backend.env.DB_LOCAL_URI=mongodb://127.0.0.1:27017/shopIT
+            backend.env.FRONTEND_URL=http://frontend-service.my-app.svc.cluster.local
+
+
