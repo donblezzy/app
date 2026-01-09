@@ -53,19 +53,16 @@ app.get('/api/health', (req, res) => {
 // Using error Middleware
 app.use(errorMiddleware)
 
-app.listen(process.env.PORT, () => {
+// Start server
+const server = app.listen(process.env.PORT, '0.0.0.0', () => {
     console.log(`Server started on PORT: ${process.env.PORT} in ${process.env.NODE_ENV} mode`);
 });
 
-//Handle Unhandled Promise Rejection
-// const server = app.listen(process.env.PORT, () => {
-//     console.log(`Server started on PORT: ${process.env.PORT} in ${process.env.NODE_ENV} mode`);
-// });
-
-// process.on("unhandledRejection", (err) => {
-//     console.log(`ERROR: ${err}`);
-//     console.log(`Shutting down server due to unhandled Promise Rejection`);
-//     server.close(() => {
-//         process.exit(1)
-//     })
-// })
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (err) => {
+    console.error(`ERROR: ${err}`);
+    console.error(`Shutting down server due to unhandled promise rejection`);
+    server.close(() => {
+        process.exit(1);
+    });
+});
