@@ -1,66 +1,72 @@
-// server.js
 import dotenv from "dotenv";
-import path from "path";
+import path from "path"
 import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-
-import productRoutes from './routes/products.js';
-import authRoutes from './routes/auth.js';
-import orderRoutes from './routes/order.js';
-import paymentRoutes from './routes/payment.js';
+import productRoutes from './routes/products.js'
+import authRoutes from './routes/auth.js'
+import orderRoutes from './routes/order.js'
+import paymentRoutes from './routes/payment.js'
 import { connectDatabase } from "./config/dbConnect.js";
 import errorMiddleware from "./middlewares/error.js";
 
-// Get __dirname in ES module scope
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
+// Connecting Database
+connectDatabase()
 
-// Connect to database
-connectDatabase();
+app.use(cors({origin: "http://localhost:5000",  credentials: true}));
 
-// Middleware
-app.use(cors({ origin: process.env.FRONTEND_URL || "*", credentials: true }));
-app.use(express.json({ limit: "10mb", verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
-app.use(cookieParser());
+app.use(express.json({ limit: "10mb", verify: (req, res, buf) => {
+    req.rawBody = buf.toString()
+}}))
+app.use(cookieParser())
 
-// API Routes (all prefixed with /api)
-app.use('/api/products', productRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/payment', paymentRoutes);
+// Importing ProductRoutes
+app.use('/api', productRoutes)
+// Importing authRoutes
+app.use('/api', authRoutes)
+// Importing orderRoutes
+app.use('/api', orderRoutes)
+// Importing paymentRoutes
+app.use('/api', paymentRoutes)
 
-// Health Check Endpoint
-app.get('/api/health', (req, res) => res.json({ status: "ok" }));
+if (process.env.NODE_ENV === "PRODUCTION") {
+    app.use(express.static(path.join(__dirname, "../frontend/build")))
 
-// Serve frontend in production
- if (process.env.NODE_ENV === "PRODUCTION") {
-  app.use(express.static(path.join(__dirname, "../frontend/build")));
+    app.get("*", (req, res) => (
+        res.sendFile(path.resolve(__dirname, "../frontend/build/index.html"))
+    ))
+}
 
-  // All unknown routes serve the frontend SPA
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, "../frontend/build/index.html"));
-  });
- }
+// Using error Middleware
+app.use(errorMiddleware)
 
-// Error Middleware
-app.use(errorMiddleware);
+app.listen(process.env.PORT, () => {
+    console.log(`Server started on PORT: ${process.env.PORT} in ${process.env.NODE_ENV} mode`);
+     });
 
-// Start Server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (err) => {
-  console.error(`Unhandled Rejection: ${err}`);
-  process.exit(1);
-});
+
+
+//Handle Unhandled Promise Rejection
+
+// const server = app.listen(process.env.PORT, () => {
+//     console.log(`Server started on PORT: ${process.env.PORT} in ${process.env.NODE_ENV} mode`);
+// });
+
+// process.on("unhandledRejection", (err) => {
+//     console.log(`ERROR: ${err}`);
+//     console.log(`Shutting down server due to unhandled Promise Rejection`);
+//     server.close(() => {
+//         process.exit(1)
+//     })
+// })
+

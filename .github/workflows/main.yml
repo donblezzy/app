@@ -42,7 +42,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
-        run: aws ecr get-login-password | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+        run: |
+          aws ecr get-login-password \
+          | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
       - name: Build & Push Backend Image
         uses: appleboy/docker-ecr-action@master
@@ -50,8 +52,8 @@ jobs:
           registry: ${{ env.ECR_REGISTRY }}
           repo: ${{ env.BACKEND_IMAGE }}
           region: ${{ env.AWS_REGION }}
-          dockerfile: backend/Dockerfile
-          context: backend
+          dockerfile: ./backend/Dockerfile
+          context: ./backend
           tags: latest,${{ github.run_number }}
 
       - name: Build & Push Frontend Image
@@ -60,15 +62,16 @@ jobs:
           registry: ${{ env.ECR_REGISTRY }}
           repo: ${{ env.FRONTEND_IMAGE }}
           region: ${{ env.AWS_REGION }}
-          dockerfile: frontend/Dockerfile
-          context: frontend
+          dockerfile: ./frontend/Dockerfile
+          context: ./frontend
           tags: latest,${{ github.run_number }}
 
   deploy-to-eks:
     needs: build-and-push
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
@@ -79,11 +82,26 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER }} \
+            --region ${{ env.AWS_REGION }}
 
+      # -------------------------
+      # CREATE NAMESPACE (FIX)
+      # -------------------------
+      - name: Ensure namespace exists
+        run: |
+          kubectl get namespace ${{ env.NAMESPACE }} \
+          || kubectl create namespace ${{ env.NAMESPACE }}
+
+      # -------------------------
+      # ECR IMAGE PULL SECRET
+      # -------------------------
       - name: Create ECR pull secret
         run: |
           kubectl delete secret regcred -n ${{ env.NAMESPACE }} --ignore-not-found
+
           kubectl create secret docker-registry regcred \
             -n ${{ env.NAMESPACE }} \
             --docker-server=${{ env.ECR_REGISTRY }} \
@@ -91,11 +109,12 @@ jobs:
             --docker-password=$(aws ecr get-login-password)
 
       # -------------------------
-      # Create backend secrets (all sensitive vars)
+      # BACKEND SECRETS
       # -------------------------
       - name: Create Backend Secrets
         run: |
           kubectl delete secret backend-secret -n ${{ env.NAMESPACE }} --ignore-not-found
+
           kubectl create secret generic backend-secret \
             -n ${{ env.NAMESPACE }} \
             --from-literal=DB_URI="${{ secrets.DB_URI }}" \
@@ -115,7 +134,7 @@ jobs:
             --from-literal=CLOUDINARY_API_SECRET="${{ secrets.CLOUDINARY_API_SECRET }}"
 
       # -------------------------
-      # Deploy Helm Charts
+      # HELM DEPLOY
       # -------------------------
       - name: Deploy Helm Chart
         uses: bitovi/github-actions-deploy-eks-helm@v1.2.12
@@ -128,13 +147,11 @@ jobs:
           namespace: ${{ env.NAMESPACE }}
           name: ecom-stack
           values: |
-            # Docker images
             backend.image=${{ env.ECR_REGISTRY }}/${{ env.BACKEND_IMAGE }}
             backend.tag=${{ github.run_number }}
             frontend.image=${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_IMAGE }}
             frontend.tag=${{ github.run_number }}
 
-            # Non-sensitive environment variables
             backend.env.NODE_ENV=PRODUCTION
             backend.env.PORT=5000
             backend.env.FRONTEND_URL=http://localhost:3000
